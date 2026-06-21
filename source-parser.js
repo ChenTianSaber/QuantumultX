@@ -3420,7 +3420,7 @@ function get_emoji(emojip, sname) {
   }
     str1 = JSON.stringify(Lmoji)
     aa = JSON.parse(str1)
-    bb = JSON.parse(str1.replace(/🇹🇼/g, " 🇨🇳"))
+    bb = JSON.parse(str1.replace(/🇹🇼/g, "🇨🇳"))
     var cnt = emojip ==1? aa:bb;
     var cleanName = sname.replace(/[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]/g, "").replace(/\s+/g, " ").trim();
     var regionName = cleanName.split(/[|｜丨]/)[0].trim();
@@ -3453,7 +3453,7 @@ function get_emoji(emojip, sname) {
         var flag = String(name).trim().match(/^[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]/)
         if (!flag) { return "" }
         if (cnt[flag[0]]) { return flag[0] }
-        if (emojip == 2 && flag[0] == "🇹🇼" && cnt[" 🇨🇳"]) { return " 🇨🇳" }
+        if (emojip == 2 && flag[0] == "🇹🇼" && cnt["🇨🇳"]) { return "🇨🇳" }
         return ""
     }
 
