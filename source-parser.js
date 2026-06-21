@@ -695,6 +695,8 @@ function Profile_Handle() {
 //流量信息
 //{bytes_used: 1073741824, bytes_remaining: 2147483648, expire_date: 1653193966}}
 var Finfo={}
+MergeFlowInfo(ParseHeaderFlowInfo(subinfo))
+MergeFlowInfo(ParseTextFlowInfo(content0))
 if (Pflow!=0) {
   Pflow = Pflow.split(":")
   var Bdate=Date.parse(new Date(Pflow[0]))/1000
@@ -704,6 +706,94 @@ if (Pflow!=0) {
   var BJson={bytes_used: Bused, bytes_remaining: Bremain, expire_date: Bdate}
   //$notify("Flow","",JSON.strigify(BJson))
   Finfo = BJson
+}
+
+function MergeFlowInfo(info) {
+  if (!info) { return }
+  for (var key in info) {
+    if (typeof Finfo[key] == "undefined") {
+      Finfo[key] = info[key]
+    }
+  }
+}
+
+function FlowUnitToBytes(num, unit) {
+  var n = Number(String(num).replace(/,/g, ""))
+  var u = String(unit || "G").toUpperCase()
+  if (!n) { return 0 }
+  if (u.indexOf("T") == 0) { return n * 1024 * 1024 * 1024 * 1024 }
+  if (u.indexOf("M") == 0) { return n * 1024 * 1024 }
+  return n * 1024 * 1024 * 1024
+}
+
+function ParseHeaderFlowInfo(info) {
+  var result = {}
+  if (!info) { return result }
+  try {
+    var sinfo = String(info).replace(/ /g, "").toLowerCase()
+    var total = sinfo.indexOf("total=") != -1 ? Number(sinfo.split("total=")[1].split(",")[0]) : 0
+    var upload = sinfo.indexOf("upload=") != -1 ? Number(sinfo.split("upload=")[1].split(",")[0]) : 0
+    var download = sinfo.indexOf("download=") != -1 ? Number(sinfo.split("download=")[1].split(",")[0]) : 0
+    if (total) {
+      result.bytes_used = upload + download
+      result.bytes_remaining = Math.max(total - result.bytes_used, 0)
+    }
+    if (sinfo.indexOf("expire=") != -1) {
+      result.expire_date = Number(sinfo.split("expire=")[1].split(",")[0])
+    }
+  } catch (error) {
+    console.log(error)
+  }
+  return result
+}
+
+function ParseTextFlowInfo(cnt) {
+  var result = {}
+  if (!cnt) { return result }
+  try {
+    var text = String(cnt)
+    if (/^[A-Za-z0-9+\/=\r\n]+$/.test(text.trim())) {
+      var decoded = Base64.decode(text.replace(/\s+/g, ""))
+      if (/tag=|剩余|流量|套餐|到期/i.test(decoded)) { text = decoded }
+    }
+    var tags = []
+    text.split(/\r?\n/).forEach(function(line) {
+      var m = line.match(/(?:^|,)\s*tag\s*=\s*([^,\n]+)/)
+      if (m) {
+        try {
+          tags.push(decodeURIComponent(m[1].trim()))
+        } catch (e) {
+          tags.push(m[1].trim())
+        }
+      } else if (/剩余|流量|套餐|到期|expire/i.test(line)) {
+        tags.push(line.trim())
+      }
+    })
+    var joined = tags.join("\n")
+    var days = joined.match(/(?:套餐|到期|有效期)[^\n,，]*?剩余\s*(\d+)\s*天/) || joined.match(/剩余\s*(\d+)\s*天/)
+    if (days) {
+      result.expire_date = Math.floor(Date.now() / 1000) + Number(days[1]) * 86400
+    }
+    var lines = joined.split(/\n/)
+    for (var i = 0; i < lines.length; i++) {
+      var left = lines[i].match(/剩余\s*([0-9]+(?:\.[0-9]+)?)\s*(TB|T|GB|G|MB|M)/i)
+      if (!left) { continue }
+      var beforeLeft = lines[i].slice(0, lines[i].indexOf(left[0]))
+      var totals = beforeLeft.match(/([0-9]+(?:\.[0-9]+)?)\s*(TB|T|GB|G|MB|M)/ig)
+      var remainBytes = FlowUnitToBytes(left[1], left[2])
+      var totalBytes = 0
+      if (totals && totals.length > 0) {
+        var total = totals[totals.length - 1].match(/([0-9]+(?:\.[0-9]+)?)\s*(TB|T|GB|G|MB|M)/i)
+        if (total) { totalBytes = FlowUnitToBytes(total[1], total[2]) }
+      }
+      result.bytes_remaining = remainBytes
+      result.bytes_used = totalBytes ? Math.max(totalBytes - remainBytes, 0) : 0
+      break
+    }
+  } catch (error) {
+    console.log(error)
+  }
+  return result
 }
 
 //STATUS=🚀↑:0.62GB,↓:15.1GB,TOT:200GB💡Expires:2026-08-02
